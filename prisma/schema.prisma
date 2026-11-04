@@ -30,15 +30,27 @@ datasource db {
   provider = "postgresql"
 }
 
+// Rol GLOBAL por usuario (un solo condominio en el sistema).
+enum Rol {
+  RESIDENTE
+  ADMINISTRADOR
+  SEGURIDAD
+
+  @@map("rol")
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
+  nombre       String
+  rol          Rol      @default(RESIDENTE)
   passwordHash String   @map("password_hash")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
+  unidades      UsuarioUnidad[]
 
   @@map("users")
 }
@@ -59,4 +71,47 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model Torre {
+  id        String   @id @default(uuid()) @db.Uuid
+  nombre    String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  unidades Unidad[]
+
+  @@map("torre")
+}
+
+model Unidad {
+  id      String @id @default(uuid()) @db.Uuid
+  torreId String @map("torre_id") @db.Uuid
+  torre   Torre  @relation(fields: [torreId], references: [id], onDelete: Restrict)
+
+  // Identificador legible, ej. "A-101".
+  codigo    String   @unique
+  activa    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  usuarios UsuarioUnidad[]
+
+  @@index([torreId])
+  @@map("unidad")
+}
+
+// Relación N:M entre usuarios y unidades (un residente puede tener varias).
+model UsuarioUnidad {
+  usuarioId String @map("usuario_id") @db.Uuid
+  usuario   User   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  unidadId String @map("unidad_id") @db.Uuid
+  unidad   Unidad @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([usuarioId, unidadId])
+  @@index([unidadId])
+  @@map("usuario_unidad")
 }
