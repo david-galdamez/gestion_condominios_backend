@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsNotEmpty, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { IsNormalizedEmail } from '@Common/decorators';
 
 export class CreateUserDto {
@@ -26,4 +26,13 @@ export class CreateUserDto {
     message: 'La contraseña debe incluir al menos una minúscula, una mayúscula y un número.',
   })
   password!: string;
+
+  @ApiProperty({ description: 'Nombre completo.', example: 'Residente Uno', maxLength: 120 })
+  @IsString()
+  @IsNotEmpty({ message: 'El nombre es obligatorio.' })
+  @MaxLength(120)
+  nombre!: string;
+
+  // El rol no se acepta en el registro público: todo usuario queda como RESIDENTE
+  // (default de la base). La asignación de roles será responsabilidad de un flujo de administración.
 }
