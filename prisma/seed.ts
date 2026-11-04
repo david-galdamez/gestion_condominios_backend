@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Rol } from '../src/generated/prisma/client.js';
+import { EstadoCuota, PrismaClient, Rol } from '../src/generated/prisma/client.js';
 
 const PASSWORD = 'Demo1234!';
 
@@ -59,6 +59,42 @@ async function main() {
         where: { usuarioId_unidadId: { usuarioId: user.id, unidadId } },
         update: {},
         create: { usuarioId: user.id, unidadId },
+      });
+    }
+  }
+
+  // Cuotas: upsert por (unidadId, periodo) para que sea idempotente.
+  type CuotaSeed = { periodo: string; monto: number; estado: EstadoCuota };
+  const periodos = (desde: [number, number], n: number) =>
+    Array.from({ length: n }, (_, i) => {
+      const m = desde[1] - 1 + i;
+      return `${desde[0] + Math.floor(m / 12)}-${String((m % 12) + 1).padStart(2, '0')}`;
+    });
+  const estadoDe = (p: string): EstadoCuota =>
+    p >= '2026-11' ? EstadoCuota.PENDIENTE : p >= '2026-09' ? EstadoCuota.VENCIDA : EstadoCuota.PAGADA;
+
+  const cuotasPorUnidad: Record<string, CuotaSeed[]> = {
+    // 24 meses 2024-11..2026-10 + 2026-11 (25 filas) para probar paginación.
+    'A-101': periodos([2024, 11], 25).map((periodo) => ({ periodo, monto: 45, estado: estadoDe(periodo) })),
+    'B-205': [
+      { periodo: '2026-09', monto: 60, estado: EstadoCuota.PAGADA },
+      { periodo: '2026-10', monto: 60, estado: EstadoCuota.VENCIDA },
+      { periodo: '2026-11', monto: 60, estado: EstadoCuota.PENDIENTE },
+    ],
+    'A-102': [
+      { periodo: '2026-10', monto: 45, estado: EstadoCuota.VENCIDA },
+      { periodo: '2026-11', monto: 45, estado: EstadoCuota.PENDIENTE },
+    ],
+  };
+  for (const [codigo, cuotas] of Object.entries(cuotasPorUnidad)) {
+    const unidadId = unidadIds.get(codigo)!;
+    for (const { periodo, monto, estado } of cuotas) {
+      const fechaVencimiento = new Date(`${periodo}-10T00:00:00.000Z`);
+      const pagadaEn = estado === EstadoCuota.PAGADA ? new Date(`${periodo}-05T12:00:00.000Z`) : null;
+      await prisma.cuota.upsert({
+        where: { unidadId_periodo: { unidadId, periodo } },
+        update: { monto, fechaVencimiento, estado, pagadaEn },
+        create: { unidadId, periodo, monto, fechaVencimiento, estado, pagadaEn },
       });
     }
   }
