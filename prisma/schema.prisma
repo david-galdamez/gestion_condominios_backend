@@ -96,6 +96,7 @@ model Unidad {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   usuarios UsuarioUnidad[]
+  cuotas   Cuota[]
 
   @@index([torreId])
   @@map("unidad")
@@ -114,4 +115,34 @@ model UsuarioUnidad {
   @@id([usuarioId, unidadId])
   @@index([unidadId])
   @@map("usuario_unidad")
+}
+
+enum EstadoCuota {
+  PENDIENTE
+  VENCIDA
+  PAGADA
+
+  @@map("estado_cuota")
+}
+
+// Cuota mensual de mantenimiento de una unidad. No se borra: el historial es
+// parte del estado de cuenta (por eso onDelete Restrict y sin endpoint delete).
+model Cuota {
+  id       String @id @default(uuid()) @db.Uuid
+  unidadId String @map("unidad_id") @db.Uuid
+  unidad   Unidad @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  // "YYYY-MM"; ordena bien como texto.
+  periodo          String      @db.Char(7)
+  // CHECK (monto > 0) agregado a mano en el SQL de la migración.
+  monto            Decimal     @db.Decimal(10, 2)
+  fechaVencimiento DateTime    @map("fecha_vencimiento") @db.Date
+  estado           EstadoCuota @default(PENDIENTE)
+  pagadaEn         DateTime?   @map("pagada_en")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  @@unique([unidadId, periodo])
+  @@index([unidadId, estado])
+  @@map("cuota")
 }

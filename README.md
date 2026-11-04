@@ -20,6 +20,7 @@ API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con aut
 - [Path aliases](#path-aliases)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Scripts disponibles](#scripts-disponibles)
+- [Pruebas](#pruebas)
 
 ---
 
@@ -533,3 +534,19 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 | `prisma:studio` | Abre Prisma Studio |
 | `db:seed` | Carga el usuario demo |
 | `db:reset` | Resetea la base y vuelve a migrar |
+
+---
+
+## Pruebas
+
+- **Unitarias** (`npm test`): archivos `*.spec.ts` junto al código, con dependencias simuladas. No requieren base de datos.
+- **Integración / e2e** (`npm run test:e2e`): archivos `test/*.e2e-spec.ts` que levantan la app real (misma configuración que producción, vía `configureApp`) contra un Postgres real y hacen login por HTTP.
+
+Requisito para los e2e: el Postgres de Docker arriba en `localhost:5432` (`docker compose up -d postgres`). Usan una base separada, `condominios_test`, para no tocar la de desarrollo:
+
+```bash
+cp .env.test.example .env.test   # una sola vez; .env.test no se versiona
+npm run test:e2e
+```
+
+El `globalSetup` crea la base si no existe y corre `prisma migrate deploy`; cada archivo vacía las tablas (`TRUNCATE`) antes de cada test. El cron de vencimiento no se dispara en los e2e: se invoca `CuotasVencimientoService.marcarVencidas()` directamente.
