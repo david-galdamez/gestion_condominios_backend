@@ -10,33 +10,15 @@ export interface FiltrosCuota {
   hasta?: Date;
 }
 
-export interface UnidadResumen {
-  id: string;
-  codigo: string;
-}
-
 /**
- * Único punto del módulo que habla con las tablas `cuota` y `usuario_unidad`.
+ * Único punto del módulo que habla con las tabla `cuota`.
  * No expone borrado: las cuotas son historial contable.
  */
 @Injectable()
 export class CuotaRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Unidades del usuario, ordenadas por código (alimenta el selector). */
-  async findUnidadesDeUsuario(usuarioId: string): Promise<UnidadResumen[]> {
-    return this.prisma.unidad.findMany({
-      where: { usuarios: { some: { usuarioId } } },
-      select: { id: true, codigo: true },
-      orderBy: { codigo: 'asc' },
-    });
-  }
-
-  async findPagina(
-    filtros: FiltrosCuota,
-    skip: number,
-    take: number,
-  ): Promise<{ cuotas: Cuota[]; total: number }> {
+  async findPagina(filtros: FiltrosCuota, skip: number, take: number): Promise<{ cuotas: Cuota[]; total: number }> {
     const where = this.buildWhere(filtros);
     const [cuotas, total] = await Promise.all([
       this.prisma.cuota.findMany({
@@ -82,7 +64,10 @@ export class CuotaRepository {
       unidadId,
       ...(estado && { estado }),
       ...((desde || hasta) && {
-        fechaVencimiento: { ...(desde && { gte: desde }), ...(hasta && { lte: hasta }) },
+        fechaVencimiento: {
+          ...(desde && { gte: desde }),
+          ...(hasta && { lte: hasta }),
+        },
       }),
     };
   }

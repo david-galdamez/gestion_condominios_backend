@@ -1,18 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { aFechaUtc, hoyEnZonaNegocio, ZONA_NEGOCIO } from '@Common/fechas';
 import { CuotaRepository } from '@EstadoCuenta/repositories';
-
-const ZONA_NEGOCIO = 'America/El_Salvador';
-
-/** "Hoy" en la zona del negocio como YYYY-MM-DD (en-CA formatea así). */
-export function hoyEnZonaNegocio(ahora: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: ZONA_NEGOCIO,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(ahora);
-}
 
 @Injectable()
 export class CuotasVencimientoService {
@@ -33,7 +22,7 @@ export class CuotasVencimientoService {
   async marcarVencidas(hoy: Date = new Date()): Promise<number> {
     // Fecha local de El Salvador, llevada a medianoche UTC para comparar con
     // la columna DATE (que Prisma entrega/recibe en UTC).
-    const fechaHoy = new Date(`${hoyEnZonaNegocio(hoy)}T00:00:00.000Z`);
+    const fechaHoy = aFechaUtc(hoyEnZonaNegocio(hoy));
     const count = await this.cuotas.marcarVencidas(fechaHoy);
     this.logger.log(`Cuotas marcadas como VENCIDA: ${count} (hoy=${fechaHoy.toISOString().slice(0, 10)})`);
     return count;

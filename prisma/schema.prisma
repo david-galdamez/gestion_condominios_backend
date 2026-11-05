@@ -49,8 +49,9 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  refreshTokens RefreshToken[]
-  unidades      UsuarioUnidad[]
+  refreshTokens        RefreshToken[]
+  unidades             UsuarioUnidad[]
+  autorizacionesVisita AutorizacionVisita[]
 
   @@map("users")
 }
@@ -95,8 +96,9 @@ model Unidad {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  usuarios UsuarioUnidad[]
-  cuotas   Cuota[]
+  usuarios       UsuarioUnidad[]
+  cuotas         Cuota[]
+  autorizaciones AutorizacionVisita[]
 
   @@index([torreId])
   @@map("unidad")
@@ -145,4 +147,53 @@ model Cuota {
   @@unique([unidadId, periodo])
   @@index([unidadId, estado])
   @@map("cuota")
+}
+
+enum TipoDocumento {
+  DUI
+  PASAPORTE
+
+  @@map("tipo_documento")
+}
+
+enum EstadoAutorizacion {
+  VIGENTE
+  USADA
+  CANCELADA
+  VENCIDA
+
+  @@map("estado_autorizacion")
+}
+
+// Pre-autorización de un visitante creada por un residente. No se borra: el
+// historial sirve a seguridad y auditoría (cancelar solo cambia el estado).
+model AutorizacionVisita {
+  id String @id @default(uuid()) @db.Uuid
+
+  unidadId String @map("unidad_id") @db.Uuid
+  unidad   Unidad @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  // Siempre sale de la sesión, nunca del cliente.
+  residenteId String @map("residente_id") @db.Uuid
+  residente   User   @relation(fields: [residenteId], references: [id], onDelete: Restrict)
+
+  nombre          String        @db.VarChar(60)
+  tipoDocumento   TipoDocumento @map("tipo_documento")
+  numeroDocumento String        @map("numero_documento") @db.VarChar(12)
+  placa           String?       @db.VarChar(10)
+
+  // Fecha y hora locales del negocio, sin zona: por eso date y time.
+  fechaVisita  DateTime @map("fecha_visita") @db.Date
+  horaEstimada DateTime @map("hora_estimada") @db.Time(0)
+
+  // 6 dígitos; único solo dentro del día de la visita (se reutiliza entre días).
+  codigo String             @db.Char(6)
+  estado EstadoAutorizacion @default(VIGENTE)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([codigo, fechaVisita])
+  @@index([residenteId, fechaVisita])
+  @@map("autorizacion_visita")
 }

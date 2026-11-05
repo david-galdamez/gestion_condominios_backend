@@ -1,17 +1,22 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { CuotaRepository, type UnidadResumen } from '@EstadoCuenta/repositories';
+import { aFechaUtc } from '@Common/fechas';
+import { CuotaRepository } from '@EstadoCuenta/repositories';
+import { UnidadRepository, type UnidadResumen } from '@Unidades/repositories';
 import { PAGE_SIZE, type EstadoCuentaQueryDto, type EstadoCuentaResponseDto } from '@EstadoCuenta/dto';
 
-/** Fecha YYYY-MM-DD -> medianoche UTC, que es como Prisma maneja @db.Date. */
-const aFechaUtc = (iso?: string) => (iso ? new Date(`${iso}T00:00:00.000Z`) : undefined);
+/** Variante opcional: los filtros desde/hasta pueden no venir. */
+const aFechaUtcOpc = (iso?: string) => (iso ? aFechaUtc(iso) : undefined);
 
 @Injectable()
 export class EstadoCuentaService {
-  constructor(private readonly cuotas: CuotaRepository) {}
+  constructor(
+    private readonly cuotas: CuotaRepository,
+    private readonly unidadesRepo: UnidadRepository,
+  ) {}
 
   async consultar(usuarioId: string, query: EstadoCuentaQueryDto): Promise<EstadoCuentaResponseDto> {
     const pagina = query.pagina ?? 1;
-    const unidades = await this.cuotas.findUnidadesDeUsuario(usuarioId);
+    const unidades = await this.unidadesRepo.findDeUsuario(usuarioId);
 
     // Se valida contra las unidades de la sesión: una unidad ajena o
     // inexistente responde igual (403) para no revelar qué ids existen.
@@ -22,7 +27,15 @@ export class EstadoCuentaService {
     }
 
     if (!unidad) {
-      return { unidad: null, unidades, saldoTotal: 0, datos: [], total: 0, pagina, porPagina: PAGE_SIZE };
+      return {
+        unidad: null,
+        unidades,
+        saldoTotal: 0,
+        datos: [],
+        total: 0,
+        pagina,
+        porPagina: PAGE_SIZE,
+      };
     }
 
     const [saldo, { cuotas, total }] = await Promise.all([
@@ -32,8 +45,8 @@ export class EstadoCuentaService {
         {
           unidadId: unidad.id,
           estado: query.estado,
-          desde: aFechaUtc(query.desde),
-          hasta: aFechaUtc(query.hasta),
+          desde: aFechaUtcOpc(query.desde),
+          hasta: aFechaUtcOpc(query.hasta),
         },
         (pagina - 1) * PAGE_SIZE,
         PAGE_SIZE,

@@ -1,23 +1,27 @@
 import { ForbiddenException } from '@nestjs/common';
 import { EstadoCuota, Prisma } from '@PrismaClient';
 import { EstadoCuentaService } from './estado-cuenta.service.js';
+import type { UnidadRepository } from '@Unidades/repositories';
 import type { CuotaRepository } from '../repositories/cuota.repository.js';
 import type { EstadoCuentaQueryDto } from '../dto/estado-cuenta-query.dto.js';
 
 describe('EstadoCuentaService', () => {
   const u1 = { id: 'u-1', codigo: 'A-101' };
   const u2 = { id: 'u-2', codigo: 'B-205' };
+  const unidadesRepo = { findDeUsuario: vi.fn() };
   const repo = {
-    findUnidadesDeUsuario: vi.fn(),
     findPagina: vi.fn(),
     sumarSaldoPendiente: vi.fn(),
   };
-  const service = new EstadoCuentaService(repo as unknown as CuotaRepository);
+  const service = new EstadoCuentaService(
+    repo as unknown as CuotaRepository,
+    unidadesRepo as unknown as UnidadRepository,
+  );
   const query = (q: Partial<EstadoCuentaQueryDto> = {}) => ({ pagina: 1, ...q }) as EstadoCuentaQueryDto;
 
   beforeEach(() => {
     vi.resetAllMocks();
-    repo.findUnidadesDeUsuario.mockResolvedValue([u1, u2]);
+    unidadesRepo.findDeUsuario.mockResolvedValue([u1, u2]);
     repo.sumarSaldoPendiente.mockResolvedValue(new Prisma.Decimal('90'));
     repo.findPagina.mockResolvedValue({
       total: 1,
@@ -54,17 +58,35 @@ describe('EstadoCuentaService', () => {
   });
 
   it('responde vacío si el usuario no tiene unidades', async () => {
-    repo.findUnidadesDeUsuario.mockResolvedValue([]);
+    unidadesRepo.findDeUsuario.mockResolvedValue([]);
     const r = await service.consultar('user', query());
-    expect(r).toEqual({ unidad: null, unidades: [], saldoTotal: 0, datos: [], total: 0, pagina: 1, porPagina: 20 });
+    expect(r).toEqual({
+      unidad: null,
+      unidades: [],
+      saldoTotal: 0,
+      datos: [],
+      total: 0,
+      pagina: 1,
+      porPagina: 20,
+    });
   });
 
   it('el saldo lleva 2 decimales y no recibe los filtros', async () => {
     repo.sumarSaldoPendiente.mockResolvedValue(new Prisma.Decimal('90.1'));
-    const r = await service.consultar('user', query({ unidadId: 'u-2', estado: EstadoCuota.PAGADA, desde: '2026-01-01' }));
+    const r = await service.consultar(
+      'user',
+      query({
+        unidadId: 'u-2',
+        estado: EstadoCuota.PAGADA,
+        desde: '2026-01-01',
+      }),
+    );
     expect(r.saldoTotal).toBe(90.1);
     expect(repo.sumarSaldoPendiente).toHaveBeenCalledWith('u-2');
-    expect(repo.findPagina.mock.calls[0][0]).toMatchObject({ estado: 'PAGADA', desde: new Date('2026-01-01T00:00:00.000Z') });
+    expect(repo.findPagina.mock.calls[0][0]).toMatchObject({
+      estado: 'PAGADA',
+      desde: new Date('2026-01-01T00:00:00.000Z'),
+    });
   });
 
   it('pagina con skip 20 en la página 2', async () => {

@@ -1,13 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { UnidadResumenDto } from '@Unidades/dto';
 import { EstadoCuota } from '@PrismaClient';
-
-export class UnidadResumenDto {
-  @ApiProperty({ format: 'uuid' })
-  id!: string;
-
-  @ApiProperty({ example: 'A-101' })
-  codigo!: string;
-}
 
 export class CuotaDto {
   @ApiProperty({ format: 'uuid' })
@@ -30,10 +23,16 @@ export class EstadoCuentaResponseDto {
   @ApiProperty({ type: UnidadResumenDto, nullable: true })
   unidad!: UnidadResumenDto | null;
 
-  @ApiProperty({ type: [UnidadResumenDto], description: 'Todas las unidades del usuario (selector).' })
+  @ApiProperty({
+    type: [UnidadResumenDto],
+    description: 'Todas las unidades del usuario (selector).',
+  })
   unidades!: UnidadResumenDto[];
 
-  @ApiProperty({ example: 90.0, description: 'Pendiente + vencida, sin recargo; ignora los filtros.' })
+  @ApiProperty({
+    example: 90.0,
+    description: 'Pendiente + vencida, sin recargo; ignora los filtros.',
+  })
   saldoTotal!: number;
 
   @ApiProperty({ type: [CuotaDto] })
