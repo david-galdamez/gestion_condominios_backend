@@ -41,6 +41,8 @@
       "@Auth/*": ["./src/auth/*/index.ts"],
       "@Users": ["./src/users/index.ts"],
       "@Users/*": ["./src/users/*/index.ts"],
+      "@EstadoCuenta": ["./src/estado-cuenta/index.ts"],
+      "@EstadoCuenta/*": ["./src/estado-cuenta/*/index.ts"],
       "@Health": ["./src/health/index.ts"],
       "@Health/*": ["./src/health/*/index.ts"],
       "@Prisma": ["./src/prisma/index.ts"],

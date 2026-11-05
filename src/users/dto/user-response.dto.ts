@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { User } from '@PrismaClient';
+import { Rol, type User } from '@PrismaClient';
 
 /**
  * Forma pública de un usuario.
@@ -14,6 +14,12 @@ export class UserResponseDto {
   @ApiProperty({ example: 'nestor@example.com', format: 'email' })
   email!: string;
 
+  @ApiProperty({ example: 'Residente Uno' })
+  nombre!: string;
+
+  @ApiProperty({ enum: Rol, enumName: 'Rol' })
+  rol!: Rol;
+
   @ApiProperty()
   isActive!: boolean;
 
@@ -24,6 +30,8 @@ export class UserResponseDto {
     return {
       id: user.id,
       email: user.email,
+      nombre: user.nombre,
+      rol: user.rol,
       isActive: user.isActive,
       createdAt: user.createdAt,
     };

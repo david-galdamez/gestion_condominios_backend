@@ -1,25 +1,108 @@
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../src/generated/prisma/client.js';
+import { EstadoCuota, PrismaClient, Rol } from '../src/generated/prisma/client.js';
 
-const DEMO_EMAIL = 'demo@example.com';
-const DEMO_PASSWORD = 'Demo1234!';
+const PASSWORD = 'Demo1234!';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
+const TORRES = ['Torre A', 'Torre B'];
+
+const UNIDADES = [
+  { codigo: 'A-101', torre: 'Torre A' },
+  { codigo: 'A-102', torre: 'Torre A' },
+  { codigo: 'B-205', torre: 'Torre B' },
+];
+
+const USUARIOS = [
+  { email: 'demo@example.com', nombre: 'Usuario Demo', rol: Rol.RESIDENTE, unidades: [] as string[] },
+  { email: 'residente1@example.com', nombre: 'Residente Uno', rol: Rol.RESIDENTE, unidades: ['A-101', 'B-205'] },
+  { email: 'residente2@example.com', nombre: 'Residente Dos', rol: Rol.RESIDENTE, unidades: ['A-102'] },
+  { email: 'admin@example.com', nombre: 'Administrador', rol: Rol.ADMINISTRADOR, unidades: [] as string[] },
+];
+
 async function main() {
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
+  const passwordHash = await bcrypt.hash(PASSWORD, 12);
 
-  // `upsert` hace el seed idempotente: se puede correr las veces que haga falta.
-  const user = await prisma.user.upsert({
-    where: { email: DEMO_EMAIL },
-    update: {},
-    create: { email: DEMO_EMAIL, passwordHash },
-  });
+  // Todo con `upsert` para que el seed sea idempotente: se puede correr las
+  // veces que haga falta sin duplicar ni fallar.
+  const torreIds = new Map<string, string>();
+  for (const nombre of TORRES) {
+    const torre = await prisma.torre.upsert({ where: { nombre }, update: {}, create: { nombre } });
+    torreIds.set(nombre, torre.id);
+  }
 
-  console.log(`Usuario demo listo: ${user.email} / ${DEMO_PASSWORD}`);
+  const unidadIds = new Map<string, string>();
+  for (const { codigo, torre } of UNIDADES) {
+    const unidad = await prisma.unidad.upsert({
+      where: { codigo },
+      update: {},
+      create: { codigo, torreId: torreIds.get(torre)! },
+    });
+    unidadIds.set(codigo, unidad.id);
+  }
+
+  for (const { email, nombre, rol, unidades } of USUARIOS) {
+    // `update` re-aplica nombre y rol para que corregir el seed y volver a
+    // correrlo repare usuarios creados antes de existir estos campos.
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { nombre, rol },
+      create: { email, nombre, rol, passwordHash },
+    });
+
+    for (const codigo of unidades) {
+      const unidadId = unidadIds.get(codigo)!;
+      await prisma.usuarioUnidad.upsert({
+        where: { usuarioId_unidadId: { usuarioId: user.id, unidadId } },
+        update: {},
+        create: { usuarioId: user.id, unidadId },
+      });
+    }
+  }
+
+  // Cuotas: upsert por (unidadId, periodo) para que sea idempotente.
+  type CuotaSeed = { periodo: string; monto: number; estado: EstadoCuota };
+  const periodos = (desde: [number, number], n: number) =>
+    Array.from({ length: n }, (_, i) => {
+      const m = desde[1] - 1 + i;
+      return `${desde[0] + Math.floor(m / 12)}-${String((m % 12) + 1).padStart(2, '0')}`;
+    });
+  const estadoDe = (p: string): EstadoCuota =>
+    p >= '2026-11' ? EstadoCuota.PENDIENTE : p >= '2026-09' ? EstadoCuota.VENCIDA : EstadoCuota.PAGADA;
+
+  const cuotasPorUnidad: Record<string, CuotaSeed[]> = {
+    // 24 meses 2024-11..2026-10 + 2026-11 (25 filas) para probar paginación.
+    'A-101': periodos([2024, 11], 25).map((periodo) => ({ periodo, monto: 45, estado: estadoDe(periodo) })),
+    'B-205': [
+      { periodo: '2026-09', monto: 60, estado: EstadoCuota.PAGADA },
+      { periodo: '2026-10', monto: 60, estado: EstadoCuota.VENCIDA },
+      { periodo: '2026-11', monto: 60, estado: EstadoCuota.PENDIENTE },
+    ],
+    'A-102': [
+      { periodo: '2026-10', monto: 45, estado: EstadoCuota.VENCIDA },
+      { periodo: '2026-11', monto: 45, estado: EstadoCuota.PENDIENTE },
+    ],
+  };
+  for (const [codigo, cuotas] of Object.entries(cuotasPorUnidad)) {
+    const unidadId = unidadIds.get(codigo)!;
+    for (const { periodo, monto, estado } of cuotas) {
+      const fechaVencimiento = new Date(`${periodo}-10T00:00:00.000Z`);
+      const pagadaEn = estado === EstadoCuota.PAGADA ? new Date(`${periodo}-05T12:00:00.000Z`) : null;
+      await prisma.cuota.upsert({
+        where: { unidadId_periodo: { unidadId, periodo } },
+        update: { monto, fechaVencimiento, estado, pagadaEn },
+        create: { unidadId, periodo, monto, fechaVencimiento, estado, pagadaEn },
+      });
+    }
+  }
+
+  console.log('Seed listo. Credenciales (contraseña común: ' + PASSWORD + '):');
+  for (const { email, rol, unidades } of USUARIOS) {
+    console.log(`  ${email}  [${rol}]  unidades: ${unidades.join(', ') || '-'}`);
+  }
 }
 
 try {
