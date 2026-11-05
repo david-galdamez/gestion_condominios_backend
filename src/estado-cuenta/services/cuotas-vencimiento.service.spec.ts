@@ -1,4 +1,5 @@
-import { CuotasVencimientoService, hoyEnZonaNegocio } from './cuotas-vencimiento.service.js';
+import { hoyEnZonaNegocio } from '@Common/fechas';
+import { CuotasVencimientoService } from './cuotas-vencimiento.service.js';
 import type { CuotaRepository } from '../repositories/cuota.repository.js';
 
 describe('CuotasVencimientoService', () => {
@@ -21,7 +22,9 @@ describe('CuotasVencimientoService', () => {
   });
 
   it('delega la idempotencia al repositorio: dos llamadas, dos delegaciones', async () => {
-    const repo = { marcarVencidas: vi.fn().mockResolvedValueOnce(2).mockResolvedValueOnce(0) };
+    const repo = {
+      marcarVencidas: vi.fn().mockResolvedValueOnce(2).mockResolvedValueOnce(0),
+    };
     const service = new CuotasVencimientoService(repo as unknown as CuotaRepository);
     const ahora = new Date('2026-11-04T12:00:00Z');
     expect(await service.marcarVencidas(ahora)).toBe(2);

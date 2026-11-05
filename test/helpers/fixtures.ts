@@ -2,14 +2,14 @@ import type { INestApplication } from '@nestjs/common';
 import bcrypt from 'bcrypt';
 import request from 'supertest';
 import { PrismaService } from '@Prisma/services';
-import { EstadoCuota, Rol } from '@PrismaClient';
+import { EstadoAutorizacion, EstadoCuota, Rol, TipoDocumento } from '@PrismaClient';
 
 export const PASSWORD = 'Demo1234!';
 
 /** Vacía todas las tablas de negocio; CASCADE resuelve el orden de las FK. */
 export async function limpiarTablas(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE cuota, usuario_unidad, unidad, torre, refresh_tokens, users CASCADE',
+    'TRUNCATE TABLE autorizacion_visita, cuota, usuario_unidad, unidad, torre, refresh_tokens, users CASCADE',
   );
 }
 
@@ -34,14 +34,22 @@ export async function crearUsuario(
       nombre: email.split('@')[0],
       rol: opts.rol ?? Rol.RESIDENTE,
       passwordHash,
-      unidades: { create: (opts.unidadIds ?? []).map((unidadId) => ({ unidadId })) },
+      unidades: {
+        create: (opts.unidadIds ?? []).map((unidadId) => ({ unidadId })),
+      },
     },
   });
 }
 
 export function crearCuota(
   prisma: PrismaService,
-  data: { unidadId: string; periodo: string; monto: number | string; fechaVencimiento: string; estado?: EstadoCuota },
+  data: {
+    unidadId: string;
+    periodo: string;
+    monto: number | string;
+    fechaVencimiento: string;
+    estado?: EstadoCuota;
+  },
 ) {
   return prisma.cuota.create({
     data: {
@@ -50,6 +58,33 @@ export function crearCuota(
       monto: data.monto,
       fechaVencimiento: new Date(`${data.fechaVencimiento}T00:00:00.000Z`),
       estado: data.estado ?? EstadoCuota.PENDIENTE,
+    },
+  });
+}
+
+export function crearAutorizacion(
+  prisma: PrismaService,
+  data: {
+    unidadId: string;
+    residenteId: string;
+    codigo: string;
+    fechaVisita: string;
+    horaEstimada?: string;
+    estado?: EstadoAutorizacion;
+    nombre?: string;
+  },
+) {
+  return prisma.autorizacionVisita.create({
+    data: {
+      unidadId: data.unidadId,
+      residenteId: data.residenteId,
+      nombre: data.nombre ?? 'Visitante Prueba',
+      tipoDocumento: TipoDocumento.DUI,
+      numeroDocumento: '01234567-8',
+      codigo: data.codigo,
+      fechaVisita: new Date(`${data.fechaVisita}T00:00:00.000Z`),
+      horaEstimada: new Date(`1970-01-01T${data.horaEstimada ?? '10:00'}:00.000Z`),
+      estado: data.estado ?? EstadoAutorizacion.VIGENTE,
     },
   });
 }
